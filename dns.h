@@ -1,1 +1,1 @@
-int DNS_Lookup(char* host, char* ret);
+int DNS_Lookup(char* host, char*& ret);

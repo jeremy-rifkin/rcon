@@ -1,7 +1,7 @@
 #include <winsock2.h>
 #include <windns.h>
 
-int DNS_Lookup(char* host, char* ret) {
+int DNS_Lookup(char* host, char*& ret) {
 	DNS_STATUS status;
     PDNS_RECORD pDnsRecord;
 	WORD wType = DNS_TYPE_A;
