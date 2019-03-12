@@ -1,7 +1,7 @@
 #include <cstring>
 #include "rcon.h"
 
-const struct RCON::packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
+const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
 
 // (De-)Constructors
 RCON::RCON() {
@@ -31,7 +31,7 @@ void RCON::auth(char* password) {
 	if(password == 0x0)
 		throw valueError("Password is null pointer.");
 	// Authenticate with the server
-	packet authPacket;
+	Packet authPacket;
 
 	int passlen = 0;
 	for(; (authPacket.body[passlen++] = password[passlen]) != 0x0 && passlen < 4087;); // Copy password into authPacket.body and count the password length // Note: password[passlen] is evaluated before authPacket.body[passlen++] // passlen will include the null terminator
@@ -42,17 +42,18 @@ void RCON::auth(char* password) {
 
 	// Setup the rest of the packet
 	authPacket.size = 4 + 4 + 1 + passlen;
-	authPacket.id = 0;
+	authPacket.id = STD_TRANSMITION_ID;
 	authPacket.type = SERVERDATA_AUTH;
 
 	SendPacket(&authPacket);
 
-	packet response; // TODO Just reuse authPacket?
+	Packet response; // TODO Just reuse authPacket?
 	int tries = 0;
 	// "When the server receives an auth request, it will respond with an empty SERVERDATA_RESPONSE_VALUE, followed immediately by a SERVERDATA_AUTH_RESPONSE indicating whether authentication succeeded or failed." - https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
 	// Handle SERVERDATA_RESPONSE_VALUE, which appears not to be sent in all implementations of this protocol
 	while(tries++ < 2) {
 		GetPacket(&response);
+		
 		if(response.type == SERVERDATA_RESPONSE_VALUE && response.body[0] == 0x0) {
 			continue; // Continue to SERVERDATA_AUTH_RESPONSE
 		} else if(response.type == SERVERDATA_AUTH_RESPONSE) {
@@ -75,7 +76,7 @@ char* RCON::executeCommand(const char* command) {
 	if(command == 0x0)
 		throw valueError("Command is null pointer.");
 	
-	packet cmdPacket;
+	Packet cmdPacket;
 
 	int cmdlen = 0;
 	for(; (cmdPacket.body[cmdlen++] = command[cmdlen]) != 0x0 && cmdlen < 4087;); // cmdlen will include the null terminator
@@ -86,7 +87,7 @@ char* RCON::executeCommand(const char* command) {
 
 	// Setup the rest of the packet
 	cmdPacket.size = 4 + 4 + 1 + cmdlen;
-	cmdPacket.id = 0;
+	cmdPacket.id = STD_TRANSMITION_ID;
 	cmdPacket.type = SERVERDATA_EXECCOMMAND;
 
 	SendPacket(&cmdPacket);
@@ -98,11 +99,12 @@ char* RCON::executeCommand(const char* command) {
 	int totalResponseLength = 0;
 
 	// Get packets
-	packet responsePacket;
+	Packet responsePacket;
 	while(true) {
 		GetPacket(&responsePacket);
 		if(responsePacket.type != SERVERDATA_RESPONSE_VALUE) {
 			throw protocolError("Unexpected packet while receiving response value.");
+			continue;
 		}
 		if(responsePacket.id == RESPONSE_END_DETECTOR_ID) {
 			break; // Received mirror of the blank packet
@@ -120,7 +122,7 @@ char* RCON::executeCommand(const char* command) {
 		currentNode = &nextNode;
 		totalResponseLength += stringlen - 1;
 	}
-
+	
 	// Construct final string
 	char* response = new char[totalResponseLength + 1];
 	int idx = 0;
@@ -186,12 +188,12 @@ void RCON::initSocket(char* ip, int port) {
 	WSADATA wsa;
 	struct sockaddr_in hostaddr;
 
-	if(WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
 		throw connectionError("Socket startup failed."); // TODO: also include WSAGetLastError()?
 		return;
 	}
 	//Create a socket
-	if((server = socket(AF_INET, SOCK_STREAM, 0 )) == INVALID_SOCKET) {
+	if((server = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
 		throw connectionError("Socket creation failed."); // TODO: also include WSAGetLastError()?
 	}
 	
@@ -205,14 +207,57 @@ void RCON::initSocket(char* ip, int port) {
 	}
 
 	connected = true;
+
+	DWORD timeout = 5/*seconds*/ * 1000;
+	setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
 }
-void RCON::SendPacket(const packet* packet) const {
+void RCON::SendPacket(const Packet* packet) const {
 	if(send(server, (char*)packet, packet->size + 4, 0) < 0) {
 		throw connectionError("Packet send failed");
 	}
 }
-void RCON::GetPacket(packet* packet) {
-	if(recv(server, (char*)packet, packetSize, 0) == SOCKET_ERROR) {
-		throw connectionError("Packet recieve failed");
+void RCON::GetPacket(Packet* packet) {
+	int read = 0;
+
+	if(!packetsInBuffer) {
+		read = recv(server, tcpBuffer + bufferOffset, maxPacketSize - bufferOffset, 0);
+		
+		if(read == SOCKET_ERROR) {
+			throw connectionError("Packet recieve failed");
+		} else if(read == 0) {
+			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
+		}
 	}
+
+	// Extract packet
+	// Assumes start of packet is aligned with start of buffer
+	// That should be a safe assumption, unless packets aren't being sent correctly
+	int i;
+	// The body starts 12 bytes into the packet
+	for(i = 12; tcpBuffer[i] != 0x0 && i < bufferOffset + read; i++);
+	if(tcpBuffer[i] != 0x0)
+		throw protocolError("Some weird error happened, most likely a malformed packet.");
+	// Check for the double null terminator
+	if(!(i + 1 < bufferOffset + read && tcpBuffer[i + 1] == 0x0))
+		throw protocolError("Double null terminator not found.");
+	i++;
+
+	// Copy packet from the buffer
+	memcpy(packet, tcpBuffer, i);
+	i++;
+
+	// Move remaining tcp stream data to the front of the buffer
+	memcpy(tcpBuffer, tcpBuffer + i, read - i);
+	bufferOffset = read - i;
+
+	if(packetsInBuffer)
+		packetsInBuffer = false;
+
+	// Check for other complete packets in the buffer
+	for(i = 12; tcpBuffer[i] != 0x0 && i < bufferOffset - 1; i++);
+	if(tcpBuffer[i] != 0x0)
+		return;
+	if(!(i + 1 < bufferOffset - 1 && tcpBuffer[i + 1] == 0x0))
+		return;
+	packetsInBuffer = true;
 }

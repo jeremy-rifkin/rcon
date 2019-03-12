@@ -14,16 +14,20 @@ class RCON {
 	SOCKET server;
 	bool authenticated = false;
 	bool connected = false;
-	struct packet {
+	struct Packet {
 		int32 size;
 		int32 id;
 		int32 type;
 		char body[4087]; // Max value for packet size is 4096 bytes. 4096 - 4 - 4 - 1 == 4087; String should be null terminated
 		char null = 0x0;
-	};
-	static const int packetSize = sizeof(packet); // 5000
+	} __attribute__((packed));
+	static const int maxPacketSize = 5000; // 4096 + 4
+	char tcpBuffer[maxPacketSize];
+	int bufferOffset = 0;
+	bool packetsInBuffer = false;
+	static const int STD_TRANSMITION_ID = 0;
 	static const int RESPONSE_END_DETECTOR_ID = 1;
-	static const struct packet RESPONSE_END_DETECTOR;
+	static const struct Packet RESPONSE_END_DETECTOR;
 	struct linkedString {
 		linkedString* next = 0x0;
 		char* string;
@@ -64,6 +68,6 @@ public:
 	};
 private:
 	void initSocket(char* ip, int port);
-	void SendPacket(const packet* packet) const;
-	void GetPacket(packet* packet);
+	void SendPacket(const Packet* packet) const;
+	void GetPacket(Packet* packet);
 };
