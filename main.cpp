@@ -5,7 +5,7 @@
 #include "rcon.h"
 #include "dns.h"
 
-const char* version = "1.0";
+const char* version = "1.1";
 
 // Software pieces
 void usage() {
@@ -29,13 +29,11 @@ bool mcColors = false;
 bool commandMode = false;
 
 bool ctrlc = false;
-bool doexit = false;
 int WINAPI ctrlhandle(DWORD ctype) {
 	ctrlc = true;
 	server.disconnect();
 	std::cout<<std::endl<<"Bye!"<<std::endl;
-	doexit = true;
-	return 0;
+	exit(1);
 }
 
 void executeCommand(const char* cmd, bool silent=false) {
@@ -43,10 +41,10 @@ void executeCommand(const char* cmd, bool silent=false) {
 	char* resp;
 	try {
 		resp = server.executeCommand(cmd);
-	} catch(std::exception e) {
+	} catch(std::exception& e) {
 		std::cout<<"\r\x1B[90mExecution failed\x1B[0m";
 		std::cout<<std::endl<<"\x1B[91mError\x1B[0m while executing command: "<<e.what()<<std::endl;
-		// Don't need to crit fail
+		return;
 	}
 	if(!commandMode || !silent) std::cout<<"\r            \r"; // Clear status message
 	if(resp[0] != 0x0) { // If there was output...
@@ -143,7 +141,7 @@ void executeCommand(const char* cmd, bool silent=false) {
 		// Reset colors
 		if(mcColors) std::cout<<"\x1B[0m";
 		// Output the newline character if necessary
-		if(resp[i - 1] != '\n')
+		if(!(commandMode || resp[i - 1] == '\n'))
 			std::cout<<std::endl;
 	}
 	// Cleanup
@@ -283,7 +281,7 @@ int main(int argc, char *argv[]) {
 	if(port > 65535) {
 		std::cout<<"\x1B[91mError\x1B[0m: Port is too large! Maximum port is 65535."<<std::endl;
 		return 1;
-	} 
+	}
 
 	// Begin checking host
 	// Check form of host
@@ -324,7 +322,6 @@ int main(int argc, char *argv[]) {
 	}
 	if(!commandMode || !silent) std::cout<<"Connecting to "<<hostIP<<" on port "<<port<<std::endl;
 	
-
 	server.connect(hostIP, port);
 	
 	
@@ -357,25 +354,25 @@ int main(int argc, char *argv[]) {
 	// Handle command mode
 	if(commandMode) {
 		if(!silent) std::cout<<host<<"> "<<command<<std::endl;
-		if(command == "")
-			return 1;
-		if(!silent) std::cout<<"\x1B[90mExecuting...\x1B[0m";
-		executeCommand(command, silent);
+		if(command[0] != 0x0)
+			executeCommand(command, silent);
+		server.disconnect();
 		return 0;
 	}
 
 	// Begin console
 	std::string command_;
 	while(true) {
-		if(ctrlc)
+		if(ctrlc) {
+			Sleep(10 * 1000);
 			break;
+		}
 		std::cout<<host<<"> ";
 		getline(std::cin, command_);
 		if(command_ == "")
 			continue;
 		executeCommand(command_.c_str());
 	}
-	while(!doexit) Sleep(100);
 	return 0;
 }
 
