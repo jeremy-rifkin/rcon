@@ -364,7 +364,7 @@ int main(int argc, char *argv[]) {
 	std::string command_;
 	while(true) {
 		if(ctrlc) {
-			Sleep(10 * 1000);
+			Sleep(5 * 1000);
 			break;
 		}
 		std::cout<<host<<"> ";
