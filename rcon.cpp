@@ -1,6 +1,8 @@
 #include <cstring>
 #include "rcon.h"
 
+#include <iostream>
+
 const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
 
 // (De-)Constructors
@@ -94,8 +96,8 @@ char* RCON::executeCommand(const char* command) {
 	SendPacket(&RESPONSE_END_DETECTOR);
 	
 	// Prepare linked string for response
-	linkedString responseHead;
-	linkedString* currentNode = &responseHead;
+	linkedString* responseHead = new linkedString;
+	linkedString* currentNode = responseHead;
 	int totalResponseLength = 0;
 
 	// Get packets
@@ -113,22 +115,23 @@ char* RCON::executeCommand(const char* command) {
 
 		// Else handle packet
 		// Copy string from packet
-		int stringlen = responsePacket.size - 4 - 4 - 1;
-		char* string = new char[stringlen - 1];
-		std::memcpy(string, responsePacket.body, stringlen - 1);
+		int stringlen = responsePacket.size - 4 - 4 - 2;
+		char* string = new char[stringlen];
+		std::memcpy(string, responsePacket.body, stringlen);
 		// Build on the linked string
-		linkedString nextNode;
-		currentNode->next = &nextNode;
+		linkedString* nextNode = new linkedString;
+		currentNode->next = nextNode;
 		currentNode->string = string;
-		currentNode->length = stringlen - 1;
-		currentNode = &nextNode;
-		totalResponseLength += stringlen - 1;
+		currentNode->length = stringlen;
+		currentNode = nextNode;
+		totalResponseLength += stringlen;
 	}
 	
 	// Construct final string
 	char* response = new char[totalResponseLength + 1];
 	int idx = 0;
-	currentNode = &responseHead;
+	currentNode = responseHead;
+	linkedString* lastNode;
 	while(currentNode->next != 0x0) {
 		// Copy string from link into response...
 		std::memcpy(response + idx, currentNode->string, currentNode->length);
@@ -136,7 +139,10 @@ char* RCON::executeCommand(const char* command) {
 		// De-allocate link string
 		delete[] currentNode->string;
 		// Move onto the next node
+		lastNode = currentNode;
 		currentNode = currentNode->next;
+		// Deallocate previous node
+		delete lastNode;
 	}
 	response[totalResponseLength] = 0x0; // Insert null terminator
 
@@ -219,6 +225,7 @@ void RCON::SendPacket(const Packet* packet) const {
 	}
 }
 void RCON::GetPacket(Packet* packet) {
+	// TODO: Make sure there are no security issues with how this is being handled.
 	char* packetbuffer = (char*)packet;
 	int read;
 	int totalread = 0;
