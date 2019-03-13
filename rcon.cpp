@@ -102,6 +102,7 @@ char* RCON::executeCommand(const char* command) {
 	Packet responsePacket;
 	while(true) {
 		GetPacket(&responsePacket);
+		
 		if(responsePacket.type != SERVERDATA_RESPONSE_VALUE) {
 			throw protocolError("Unexpected packet while receiving response value.");
 			continue;
@@ -109,6 +110,7 @@ char* RCON::executeCommand(const char* command) {
 		if(responsePacket.id == RESPONSE_END_DETECTOR_ID) {
 			break; // Received mirror of the blank packet
 		}
+
 		// Else handle packet
 		// Copy string from packet
 		int stringlen = responsePacket.size - 4 - 4 - 1;
@@ -217,47 +219,37 @@ void RCON::SendPacket(const Packet* packet) const {
 	}
 }
 void RCON::GetPacket(Packet* packet) {
-	int read = 0;
-
-	if(!packetsInBuffer) {
-		read = recv(server, tcpBuffer + bufferOffset, maxPacketSize - bufferOffset, 0);
-		
+	char* packetbuffer = (char*)packet;
+	int read;
+	int totalread = 0;
+	
+	// Get packet header (12 bytes)
+	while(totalread < 12) {
+		read = recv(server, packetbuffer + totalread, 12 - totalread, 0);
 		if(read == SOCKET_ERROR) {
 			throw connectionError("Packet recieve failed");
 		} else if(read == 0) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
+		totalread += read;
+		Sleep(10);
+	}
+	
+	int bodysize = packet->size - 4 - 4;
+	if(bodysize < 1) {
+		throw protocolError("Received improper or malformed header.");
 	}
 
-	// Extract packet
-	// Assumes start of packet is aligned with start of buffer
-	// That should be a safe assumption, unless packets aren't being sent correctly
-	int i;
-	// The body starts 12 bytes into the packet
-	for(i = 12; tcpBuffer[i] != 0x0 && i < bufferOffset + read; i++);
-	if(tcpBuffer[i] != 0x0)
-		throw protocolError("Some weird error happened, most likely a malformed packet.");
-	// Check for the double null terminator
-	if(!(i + 1 < bufferOffset + read && tcpBuffer[i + 1] == 0x0))
-		throw protocolError("Double null terminator not found.");
-	i++;
-
-	// Copy packet from the buffer
-	memcpy(packet, tcpBuffer, i);
-	i++;
-
-	// Move remaining tcp stream data to the front of the buffer
-	memcpy(tcpBuffer, tcpBuffer + i, read - i);
-	bufferOffset = read - i;
-
-	if(packetsInBuffer)
-		packetsInBuffer = false;
-
-	// Check for other complete packets in the buffer
-	for(i = 12; tcpBuffer[i] != 0x0 && i < bufferOffset - 1; i++);
-	if(tcpBuffer[i] != 0x0)
-		return;
-	if(!(i + 1 < bufferOffset - 1 && tcpBuffer[i + 1] == 0x0))
-		return;
-	packetsInBuffer = true;
+	// Get packet body (+ null byte)
+	totalread = 0;
+	while(totalread < bodysize) {
+		read = recv(server, packetbuffer + 12 + totalread, bodysize - totalread, 0);
+		if(read == SOCKET_ERROR) {
+			throw connectionError("Packet recieve failed");
+		} else if(read == 0) {
+			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
+		}
+		totalread += read;
+		Sleep(10);
+	}
 }
