@@ -110,7 +110,11 @@ char* RCON::executeCommand(const char* command) {
 			continue;
 		}
 		if(responsePacket.id == RESPONSE_END_DETECTOR_ID) {
-			break; // Received mirror of the blank packet
+			// Source servers will mirror back the packet then send another packet pack with junk data
+			// Minecraft servers will just send a packet complaining that it doesn't know what to do with the detector packet.
+			// This will accommodate both
+			if(responsePacket.size > RESPONSE_END_DETECTOR.size)
+				break;
 		}
 
 		// Else handle packet
