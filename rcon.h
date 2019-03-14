@@ -14,6 +14,8 @@ class RCON {
 	static const int SERVERDATA_RESPONSE_VALUE = 0;
 	static const int STD_TRANSMITION_ID = 0;
 	static const int RESPONSE_END_DETECTOR_ID = 1;
+	static const int MAX_PACKET_SIZE = 4500; // According to the spec the max packet size is 4096 but Valve can't implement their own fucking protocol and srcds consistently sends packets with a size field slightly larger than 4096 (on very long responses).
+	static const int MAX_BODY_SIZE = MAX_PACKET_SIZE - 4 - 4 - 1;
 	// Socket information
 	SOCKET server;
 	bool authenticated = false;
@@ -23,7 +25,7 @@ class RCON {
 		int32 size;
 		int32 id;
 		int32 type;
-		char body[4087]; // Max value for packet size is 4096 bytes. 4096 - 4 - 4 - 1 == 4087; String should be null terminated
+		char body[MAX_BODY_SIZE];
 		char null = 0x0;
 	} __attribute__((packed));
 	struct linkedString {

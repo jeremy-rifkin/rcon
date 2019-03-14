@@ -270,7 +270,7 @@ void RCON::getPacket(Packet* packet) {
 	}
 
 	int bodysize = packet->size - 4 - 4;
-	if(bodysize < 1 || packet->size > 4096) {
+	if(bodysize < 1 || packet->size > MAX_PACKET_SIZE) {
 		throw protocolError("Received improper or malformed header.");
 	}
 
