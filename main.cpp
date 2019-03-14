@@ -380,3 +380,4 @@ int main(int argc, char *argv[]) {
 // TODO: Test DNS Resolution
 // TODO: More color support?
 // TODO: Support ipv6?
+// TODO: Improve formatting and printing system

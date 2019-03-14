@@ -39,7 +39,7 @@ void RCON::auth(char* password) {
 	int passlen = 0;
 	for(; (authPacket.body[passlen++] = password[passlen]) != 0x0 && passlen < 4087;); // Copy password into authPacket.body and count the password length // Note: password[passlen] is evaluated before authPacket.body[passlen++] // passlen will include the null terminator
 	if(passlen == 4087 && password[passlen - 1] == 0x0)
-		throw protocolError("Password too long."); // TODO
+		throw protocolError("Password too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
 	if(passlen < 4087)
 		authPacket.body[passlen] = 0x0;
 
@@ -50,7 +50,7 @@ void RCON::auth(char* password) {
 
 	sendPacket(&authPacket);
 
-	Packet response; // TODO Just reuse authPacket?
+	Packet response;
 	int tries = 0;
 	// "When the server receives an auth request, it will respond with an empty SERVERDATA_RESPONSE_VALUE, followed immediately by a SERVERDATA_AUTH_RESPONSE indicating whether authentication succeeded or failed." - https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
 	// Handle SERVERDATA_RESPONSE_VALUE, which appears not to be sent in all implementations of this protocol
@@ -84,7 +84,7 @@ char* RCON::executeCommand(const char* command) {
 	int cmdlen = 0;
 	for(; (cmdPacket.body[cmdlen++] = command[cmdlen]) != 0x0 && cmdlen < 4087;); // cmdlen will include the null terminator
 	if(cmdlen == 4087 && command[cmdlen - 1] == 0x0)
-		throw protocolError("Command too long."); // TODO
+		throw protocolError("Command too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
 	if(cmdlen < 4087)
 		cmdPacket.body[cmdlen] = 0x0;
 
@@ -246,7 +246,6 @@ void RCON::sendPacket(const Packet* packet) const {
 	}
 }
 void RCON::getPacket(Packet* packet) {
-	// TODO: Make sure there are no security issues with how this is being handled.
 	char* packetbuffer = (char*)packet;
 	int read;
 	int totalread = 0;
@@ -271,7 +270,7 @@ void RCON::getPacket(Packet* packet) {
 	}
 
 	int bodysize = packet->size - 4 - 4;
-	if(bodysize < 1) {
+	if(bodysize < 1 || packet->size > 4096) {
 		throw protocolError("Received improper or malformed header.");
 	}
 
@@ -296,4 +295,4 @@ inline void RCON::swapBytes_4(int32* n) {
 		 (*n & 0xff000000)>>24;
 }
 
-// TODO: Extra packets / unexpected packets will lock up the program or cause it to behave weird... look into
+// TODO: Better error handling
