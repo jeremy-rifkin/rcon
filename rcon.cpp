@@ -1,8 +1,9 @@
 #include <cstring>
 #include "rcon.h"
 
-#include <iostream>
-
+const int16 RCON::__ed = 1;
+const char* RCON::__edc = (char*) &RCON::__ed;
+const bool RCON::IS_LITTLE_ENDIAN = RCON::__edc;
 const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
 
 // (De-)Constructors
@@ -47,14 +48,14 @@ void RCON::auth(char* password) {
 	authPacket.id = STD_TRANSMITION_ID;
 	authPacket.type = SERVERDATA_AUTH;
 
-	SendPacket(&authPacket);
+	sendPacket(&authPacket);
 
 	Packet response; // TODO Just reuse authPacket?
 	int tries = 0;
 	// "When the server receives an auth request, it will respond with an empty SERVERDATA_RESPONSE_VALUE, followed immediately by a SERVERDATA_AUTH_RESPONSE indicating whether authentication succeeded or failed." - https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
 	// Handle SERVERDATA_RESPONSE_VALUE, which appears not to be sent in all implementations of this protocol
 	while(tries++ < 2) {
-		GetPacket(&response);
+		getPacket(&response);
 		
 		if(response.type == SERVERDATA_RESPONSE_VALUE && response.body[0] == 0x0) {
 			continue; // Continue to SERVERDATA_AUTH_RESPONSE
@@ -92,8 +93,8 @@ char* RCON::executeCommand(const char* command) {
 	cmdPacket.id = STD_TRANSMITION_ID;
 	cmdPacket.type = SERVERDATA_EXECCOMMAND;
 
-	SendPacket(&cmdPacket);
-	SendPacket(&RESPONSE_END_DETECTOR);
+	sendPacket(&cmdPacket);
+	sendPacket(&RESPONSE_END_DETECTOR);
 	
 	// Prepare linked string for response
 	linkedString* responseHead = new linkedString;
@@ -103,7 +104,7 @@ char* RCON::executeCommand(const char* command) {
 	// Get packets
 	Packet responsePacket;
 	while(true) {
-		GetPacket(&responsePacket);
+		getPacket(&responsePacket);
 		
 		if(responsePacket.type != SERVERDATA_RESPONSE_VALUE) {
 			throw protocolError("Unexpected packet while receiving response value.");
@@ -223,12 +224,28 @@ void RCON::initSocket(char* ip, int port) {
 	DWORD timeout = 5/*seconds*/ * 1000;
 	setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
 }
-void RCON::SendPacket(const Packet* packet) const {
-	if(send(server, (char*)packet, packet->size + 4, 0) < 0) {
-		throw connectionError("Packet send failed");
+void RCON::sendPacket(const Packet* packet) const {
+	if(IS_LITTLE_ENDIAN) {
+		if(send(server, (char*)packet, packet->size + 4, 0) < 0) {
+			throw connectionError("Packet send failed");
+		}
+	} else {
+		char* buffer = new char[packet->size + 4];
+		memcpy(buffer, packet, packet->size + 4);
+		// Convert from big endian to little endian
+		swapBytes_4((int32*)(buffer));
+		swapBytes_4((int32*)(buffer + 4));
+		swapBytes_4((int32*)(buffer + 8));
+
+		// Perform endianness conversion
+		if(send(server, buffer, packet->size + 4, 0) < 0) {
+			delete[] buffer;
+			throw connectionError("Packet send failed");
+		}
+		delete[] buffer;
 	}
 }
-void RCON::GetPacket(Packet* packet) {
+void RCON::getPacket(Packet* packet) {
 	// TODO: Make sure there are no security issues with how this is being handled.
 	char* packetbuffer = (char*)packet;
 	int read;
@@ -246,12 +263,19 @@ void RCON::GetPacket(Packet* packet) {
 		Sleep(10);
 	}
 	
+	if(!IS_LITTLE_ENDIAN) {
+		// Convert little endian numbers values from the packet to big endian
+		swapBytes_4((int32*)(packetbuffer));
+		swapBytes_4((int32*)(packetbuffer + 4));
+		swapBytes_4((int32*)(packetbuffer + 8));
+	}
+
 	int bodysize = packet->size - 4 - 4;
 	if(bodysize < 1) {
 		throw protocolError("Received improper or malformed header.");
 	}
 
-	// Get packet body (+ null byte)
+	// Get packet body (+ empty string)
 	totalread = 0;
 	while(totalread < bodysize) {
 		read = recv(server, packetbuffer + 12 + totalread, bodysize - totalread, 0);
@@ -264,3 +288,12 @@ void RCON::GetPacket(Packet* packet) {
 		Sleep(10);
 	}
 }
+
+inline void RCON::swapBytes_4(int32* n) {
+	*n = (*n & 0x000000ff)<<24 |
+		 (*n & 0x0000ff00)<<8  |
+		 (*n & 0x00ff0000)>>8  |
+		 (*n & 0xff000000)>>24;
+}
+
+// TODO: Extra packets / unexpected packets will lock up the program or cause it to behave weird... look into
