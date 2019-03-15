@@ -35,57 +35,35 @@ int WINAPI ctrlhandle(DWORD ctype) {
 	std::cout<<std::endl<<"Bye!"<<std::endl;
 	exit(1);
 }
-char* mcColorLookup(char code) {
-	switch(code) {
-		case '0': // black
-			return "\x1B[38;2;0;0;0m";
-		case '1': // dark blue
-			return "\x1B[38;2;0;0;170m";
-		case '2': // dark green
-			return "\x1B[38;2;0;170;0m";
-		case '3': // dark aqua
-			return "\x1B[38;2;0;170;170m";
-		case '4': // dark red
-			return "\x1B[38;2;170;0;0m";
-		case '5': // dark purple
-			return "\x1B[38;2;170;0;170m";
-		case '6': // gold
-			return "\x1B[38;2;255;170;0m";
-		case '7': // gray
-			return "\x1B[38;2;170;170;170m";
-		case '8': // dark gray
-			return "\x1B[38;2;85;85;85m";
-		case '9': // blue
-			return "\x1B[38;2;85;85;255m";
-		case 'a': // green
-			return "\x1B[38;2;85;255;85m";
-		case 'b': // aqua
-			return "\x1B[38;2;85;255;255m";
-		case 'c': // red
-			return "\x1B[38;2;255;85;85m";
-		case 'd': // purple
-			return "\x1B[38;2;255;85;255m";
-		case 'e': // yellow
-			return "\x1B[38;2;255;255;85m";
-		case 'f': // white
-			return "\x1B[38;2;255;255;255m";
-		
-		case 'k': // obf
-			return "\x1B[5m";
-		case 'l': // bold
-			return "\x1B[1m";
-		case 'm': // strikethrough
-			return "\x1B[9m";
-		case 'n': // underline
-			return "\x1B[24m";
-		case 'o': // italics
-			return "\x1B[3m";
-		case 'r': // reset
-			return "\x1B[0m";
-		default:
-			return "";
-	}
+
+char nullstr = '\0';
+char* McFormattingCodesTable[128];
+void initMcFormattingCodesTable() {
+	for(int i = 0; i < 128; i++) McFormattingCodesTable[i] = &nullstr;
+	McFormattingCodesTable['0'] = "\x1B[38;2;0;0;0m"; // black
+	McFormattingCodesTable['1'] = "\x1B[38;2;0;0;170m"; // dark blue
+	McFormattingCodesTable['2'] = "\x1B[38;2;0;170;0m"; // dark green
+	McFormattingCodesTable['3'] = "\x1B[38;2;0;170;170m"; // dark aqua
+	McFormattingCodesTable['4'] = "\x1B[38;2;170;0;0m"; // dark red
+	McFormattingCodesTable['5'] = "\x1B[38;2;170;0;170m"; // dark purple
+	McFormattingCodesTable['6'] = "\x1B[38;2;255;170;0m"; // gold
+	McFormattingCodesTable['7'] = "\x1B[38;2;170;170;170m"; // gray
+	McFormattingCodesTable['8'] = "\x1B[38;2;85;85;85m"; // dark gray
+	McFormattingCodesTable['9'] = "\x1B[38;2;85;85;255m"; // blue
+	McFormattingCodesTable['a'] = "\x1B[38;2;85;255;85m"; // green
+	McFormattingCodesTable['b'] = "\x1B[38;2;85;255;255m"; // aqua
+	McFormattingCodesTable['c'] = "\x1B[38;2;255;85;85m"; // red
+	McFormattingCodesTable['d'] = "\x1B[38;2;255;85;255m"; // purple
+	McFormattingCodesTable['e'] = "\x1B[38;2;255;255;85m"; // yellow
+	McFormattingCodesTable['f'] = "\x1B[38;2;255;255;255m"; // white
+	McFormattingCodesTable['k'] = "\x1B[5m"; // obf
+	McFormattingCodesTable['l'] = "\x1B[1m"; // bold
+	McFormattingCodesTable['m'] = "\x1B[9m"; // strikethrough
+	McFormattingCodesTable['n'] = "\x1B[24m"; // underline
+	McFormattingCodesTable['o'] = "\x1B[3m"; // italics
+	McFormattingCodesTable['r'] = "\x1B[0m"; // reset
 }
+
 void executeCommand(const char* cmd, bool silent=false) {
 	if(!commandMode || !silent) std::cout<<"\x1B[90mExecuting...\x1B[0m";
 	char* resp;
@@ -111,7 +89,7 @@ void executeCommand(const char* cmd, bool silent=false) {
 					escape = "\n";
 					format = true;
 				} else if((unsigned char)resp[i] == 0xc2 && (unsigned char)resp[i + 1] == 0xa7) { // if seq == section sign, which in utf-8 is 0xC2 0xA7 // Lookahead is safe
-					escape = mcColorLookup(resp[i + 2]); // Lookahead is still safe
+					escape = McFormattingCodesTable[resp[i + 2]]; // Lookahead is still safe
 					if(*escape != '\0')
 						format = true;
 				}
@@ -133,7 +111,7 @@ void executeCommand(const char* cmd, bool silent=false) {
 		if(mcColors) std::cout<<"\x1B[0m";
 		// Output the newline character if necessary
 		if(!(commandMode || resp[i - 1] == '\n'))
-			std::cout<<"****"<<std::endl;
+			std::cout<<std::endl;
 	}
 	// Cleanup
 	delete[] resp;
@@ -145,6 +123,7 @@ int main(int argc, char *argv[]) {
 		std::cout<<"Setup error "<<GetLastError()<<" while binding ctrl handle."<<std::endl;
 		// Don't necessarily need to crit fail
 	}
+	initMcFormattingCodesTable();
 	// Make windows support ansi colors
 	HANDLE hStdout;
 	hStdout = GetStdHandle(STD_OUTPUT_HANDLE); 
@@ -368,7 +347,4 @@ int main(int argc, char *argv[]) {
 }
 
 // TODO: Linux
-// TODO: Test DNS Resolution
-// TODO: More color support?
 // TODO: Support ipv6?
-// TODO: Improve formatting and printing system
