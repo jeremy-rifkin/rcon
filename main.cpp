@@ -35,7 +35,57 @@ int WINAPI ctrlhandle(DWORD ctype) {
 	std::cout<<std::endl<<"Bye!"<<std::endl;
 	exit(1);
 }
-
+char* mcColorLookup(char code) {
+	switch(code) {
+		case '0': // black
+			return "\x1B[38;2;0;0;0m";
+		case '1': // dark blue
+			return "\x1B[38;2;0;0;170m";
+		case '2': // dark green
+			return "\x1B[38;2;0;170;0m";
+		case '3': // dark aqua
+			return "\x1B[38;2;0;170;170m";
+		case '4': // dark red
+			return "\x1B[38;2;170;0;0m";
+		case '5': // dark purple
+			return "\x1B[38;2;170;0;170m";
+		case '6': // gold
+			return "\x1B[38;2;255;170;0m";
+		case '7': // gray
+			return "\x1B[38;2;170;170;170m";
+		case '8': // dark gray
+			return "\x1B[38;2;85;85;85m";
+		case '9': // blue
+			return "\x1B[38;2;85;85;255m";
+		case 'a': // green
+			return "\x1B[38;2;85;255;85m";
+		case 'b': // aqua
+			return "\x1B[38;2;85;255;255m";
+		case 'c': // red
+			return "\x1B[38;2;255;85;85m";
+		case 'd': // purple
+			return "\x1B[38;2;255;85;255m";
+		case 'e': // yellow
+			return "\x1B[38;2;255;255;85m";
+		case 'f': // white
+			return "\x1B[38;2;255;255;255m";
+		
+		case 'k': // obf
+			return "\x1B[5m";
+		case 'l': // bold
+			return "\x1B[1m";
+		case 'm': // strikethrough
+			return "\x1B[9m";
+		case 'n': // underline
+			return "\x1B[24m";
+		case 'o': // italics
+			return "\x1B[3m";
+		case 'r': // reset
+			return "\x1B[0m";
+		default:
+			return "";
+	}
+}
 void executeCommand(const char* cmd, bool silent=false) {
 	if(!commandMode || !silent) std::cout<<"\x1B[90mExecuting...\x1B[0m";
 	char* resp;
@@ -49,100 +99,41 @@ void executeCommand(const char* cmd, bool silent=false) {
 	if(!commandMode || !silent) std::cout<<"\r            \r"; // Clear status message
 	if(resp[0] != 0x0) { // If there was output...
 		// Print response
-		int i = 0;
+		int i = 0,
+			segmenti = 0;
+		bool format;
+		char* escape;
 		for(; resp[i] != 0x0; i++) {
-			// Handle colors
+			format = false;
 			if(mcColors) {
 				//https://minecraft.gamepedia.com/Formatting_codes
 				if(resp[i] == '\\' && resp[i + 1] == 'n') { // if seq == \n // lookahead is safe
-					std::cout<<std::endl;
-					i++; // Skip ahead
-					continue;
-				}
-				// Check if a formatting code appears at i
-				if((unsigned char)resp[i] == 0xc2 && (unsigned char)resp[i + 1] == 0xa7) { // if seq == section sign, which in utf-8 is 0xC2 0xA7 // Lookahead is safe
-					// Handle formatting code
-					char code = resp[i + 2]; // Lookahead is still safe
-					switch(code) {
-						case '0': // black
-							std::cout<<"\x1B[38;2;0;0;0m";
-							break;
-						case '1': // dark blue
-							std::cout<<"\x1B[38;2;0;0;170m";
-							break;
-						case '2': // dark green
-							std::cout<<"\x1B[38;2;0;170;0m";
-							break;
-						case '3': // dark aqua
-							std::cout<<"\x1B[38;2;0;170;170m";
-							break;
-						case '4': // dark red
-							std::cout<<"\x1B[38;2;170;0;0m";
-							break;
-						case '5': // dark purple
-							std::cout<<"\x1B[38;2;170;0;170m";
-							break;
-						case '6': // gold
-							std::cout<<"\x1B[38;2;255;170;0m";
-							break;
-						case '7': // gray
-							std::cout<<"\x1B[38;2;170;170;170m";
-							break;
-						case '8': // dark gray
-							std::cout<<"\x1B[38;2;85;85;85m";
-							break;
-						case '9': // blue
-							std::cout<<"\x1B[38;2;85;85;255m";
-							break;
-						case 'a': // green
-							std::cout<<"\x1B[38;2;85;255;85m";
-							break;
-						case 'b': // aqua
-							std::cout<<"\x1B[38;2;85;255;255m";
-							break;
-						case 'c': // red
-							std::cout<<"\x1B[38;2;255;85;85m";
-							break;
-						case 'd': // purple
-							std::cout<<"\x1B[38;2;255;85;255m";
-							break;
-						case 'e': // yellow
-							std::cout<<"\x1B[38;2;255;255;85m";
-							break;
-						case 'f': // white
-							std::cout<<"\x1B[38;2;255;255;255m";
-							break;
-						
-						case 'k': // obf
-							std::cout<<"\x1B[5m";
-							break;
-						case 'l': // bold
-							std::cout<<"\x1B[1m";
-							break;
-						case 'm': // strikethrough
-							std::cout<<"\x1B[9m";
-							break;
-						case 'n': // underline
-							std::cout<<"\x1B[24m";
-							break;
-						case 'o': // italics
-							std::cout<<"\x1B[3m";
-							break;
-						case 'r': // reset
-							std::cout<<"\x1B[0m";
-							break;
-					}
-					i += 2; // Skip ahead
-					continue;
+					escape = "\n";
+					format = true;
+				} else if((unsigned char)resp[i] == 0xc2 && (unsigned char)resp[i + 1] == 0xa7) { // if seq == section sign, which in utf-8 is 0xC2 0xA7 // Lookahead is safe
+					escape = mcColorLookup(resp[i + 2]); // Lookahead is still safe
+					if(*escape != '\0')
+						format = true;
 				}
 			}
-			std::cout<<resp[i];
+			if(format) {
+				resp[i] = '\0';
+				if(i - 1 - segmenti > 0) {
+					std::cout<<(resp + segmenti);
+				}
+				std::cout<<escape;
+				i += 2;
+				segmenti = i + 1;
+			}
+		}
+		if(i - 1 - segmenti > 0) {
+			std::cout<<(resp + segmenti);
 		}
 		// Reset colors
 		if(mcColors) std::cout<<"\x1B[0m";
 		// Output the newline character if necessary
 		if(!(commandMode || resp[i - 1] == '\n'))
-			std::cout<<std::endl;
+			std::cout<<"****"<<std::endl;
 	}
 	// Cleanup
 	delete[] resp;
