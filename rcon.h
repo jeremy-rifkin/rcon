@@ -1,7 +1,6 @@
 #include <string>
 #include <exception>
 #include <winsock2.h>
-//#pragma comment(lib, "ws2_32.lib")
 #include "types.h"
 
 
@@ -50,26 +49,30 @@ public:
 	char* executeCommand(const char* command);
 	bool isAuthenticated();
 	void disconnect();
-	struct errorError: public std::exception {
-		const char* what() const throw();
-	};
-	struct connectionError: public std::exception {
-		char* errmsg = 0x0;
-		connectionError(char* msg);
-		const char* what() const throw();
-	};
+	
 	struct authenticationError: public std::exception {
 		const char* what() const throw();
 	};
-	struct protocolError: public std::exception {
-		char* errmsg = 0x0;
-		protocolError(char* msg);
+	struct exception: public std::exception {
+		exception() {};
+		exception(char* msg, char* type);
+		~exception();
 		const char* what() const throw();
+		const char* getType() const throw();
+	private:
+		char* errmsg;
+		char* errtype;
 	};
-	struct valueError: public std::exception {
-		char* errmsg = 0x0;
-		valueError(char* msg);
-		const char* what() const throw();
+	struct socketError: public exception {
+		socketError(char* msg, int ecode): exception(buildmsg(msg, ecode), "Socket Error") {};
+	private:
+		char* buildmsg(char* msg, int ecode);
+	};
+	struct protocolError: public exception {
+		protocolError(char* msg): exception(msg, "Protocol Error") {};
+	};
+	struct valueError: public exception {
+		valueError(char* msg): exception(msg, "Value Error") {};
 	};
 private:
 	void initSocket(char* ip, int port);

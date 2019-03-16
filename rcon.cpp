@@ -39,9 +39,8 @@ void RCON::auth(char* password) {
 	int passlen = 0;
 	for(; (authPacket.body[passlen++] = password[passlen]) != 0x0 && passlen < 4087;); // Copy password into authPacket.body and count the password length // Note: password[passlen] is evaluated before authPacket.body[passlen++] // passlen will include the null terminator
 	if(passlen == 4087 && password[passlen - 1] == 0x0)
-		throw protocolError("Password too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
-	if(passlen < 4087)
-		authPacket.body[passlen] = 0x0;
+		throw valueError("Password too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
+	authPacket.body[passlen] = 0x0;
 
 	// Setup the rest of the packet
 	authPacket.size = 4 + 4 + 1 + passlen;
@@ -84,9 +83,8 @@ char* RCON::executeCommand(const char* command) {
 	int cmdlen = 0;
 	for(; (cmdPacket.body[cmdlen++] = command[cmdlen]) != 0x0 && cmdlen < 4087;); // cmdlen will include the null terminator
 	if(cmdlen == 4087 && command[cmdlen - 1] == 0x0)
-		throw protocolError("Command too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
-	if(cmdlen < 4087)
-		cmdPacket.body[cmdlen] = 0x0;
+		throw valueError("Command too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
+	cmdPacket.body[cmdlen] = 0x0;
 
 	// Setup the rest of the packet
 	cmdPacket.size = 4 + 4 + 1 + cmdlen;
@@ -165,35 +163,47 @@ void RCON::disconnect() {
 	}
 }
 
-const char* RCON::errorError::what() const throw() {
-	return "The error wasn't initialized properly.";
-}
-RCON::connectionError::connectionError(char* msg) {
-	errmsg = msg;
-}
-const char* RCON::connectionError::what() const throw() {
-	if(errmsg == 0x0)
-		throw errorError();
-	return errmsg;
-}
 const char* RCON::authenticationError::what() const throw() {
 	return "Server rejected the authentication. Probably an incorrect password.";
 }
-RCON::protocolError::protocolError(char* msg) {
+RCON::exception::exception(char* msg, char* type) {
 	errmsg = msg;
+	errtype = type;
 }
-const char* RCON::protocolError::what() const throw() {
-	if(errmsg == 0x0)
-		throw errorError();
+RCON::exception::~exception() {
+	delete[] errmsg;
+	delete[] errtype;
+}
+const char* RCON::exception::what() const throw() {
 	return errmsg;
 }
-RCON::valueError::valueError(char* msg) {
-	errmsg = msg;
+const char* RCON::exception::getType() const throw() {
+	return errtype;
 }
-const char* RCON::valueError::what() const throw() {
-	if(errmsg == 0x0)
-		throw errorError();
-	return errmsg;
+
+char HEX[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+char* RCON::socketError::buildmsg(char* msg, int ecode) {
+	// Final msg will be msg + " Error code: " + hex(ecode) + "."
+	// max wsa ecode is 11031, which means the max hex length will be 4 digits
+	// So the final msg will be at least 18 characters longer
+	int l = 0; // l will include the null terminator
+	for(; msg[l++] != 0x0;);
+	char* fmsg = new char[l + 18];
+	memcpy(fmsg, msg, l - 1);
+	memcpy(fmsg + l - 1, " Error code: ", 13);
+	char hex[4];
+	int b = 0x1000;
+	int n = ecode;
+	for(int i = 0; i < 4; i++) {
+		hex[i] = HEX[n / b];
+		n %= b;
+		b /= 16;
+	}
+	memcpy(fmsg + l + 13 - 1, hex, 4);
+	fmsg[l + 17 - 1] = '.';
+	fmsg[l + 17] = '\0';
+	delete[] msg;
+	return fmsg;
 }
 
 void RCON::initSocket(char* ip, int port) {
@@ -202,12 +212,12 @@ void RCON::initSocket(char* ip, int port) {
 	struct sockaddr_in hostaddr;
 
 	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-		throw connectionError("Socket startup failed."); // TODO: also include WSAGetLastError()?
+		throw socketError("Socket startup failed.", WSAGetLastError());
 		return;
 	}
 	//Create a socket
 	if((server = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-		throw connectionError("Socket creation failed."); // TODO: also include WSAGetLastError()?
+		throw socketError("Socket creation failed.", WSAGetLastError());
 	}
 	
 	hostaddr.sin_addr.s_addr = inet_addr(ip);
@@ -216,7 +226,7 @@ void RCON::initSocket(char* ip, int port) {
 
 	//Connect to remote server
 	if(::connect(server, (struct sockaddr *)&hostaddr, sizeof(hostaddr)) < 0) {
-		throw connectionError("Socket connection failed."); // TODO: also include WSAGetLastError()?
+		throw socketError("Socket connection failed.", WSAGetLastError());
 	}
 
 	connected = true;
@@ -227,7 +237,7 @@ void RCON::initSocket(char* ip, int port) {
 void RCON::sendPacket(const Packet* packet) const {
 	if(IS_LITTLE_ENDIAN) {
 		if(send(server, (char*)packet, packet->size + 4, 0) < 0) {
-			throw connectionError("Packet send failed");
+			throw socketError("Packet send failed", WSAGetLastError());
 		}
 	} else {
 		char* buffer = new char[packet->size + 4];
@@ -240,7 +250,7 @@ void RCON::sendPacket(const Packet* packet) const {
 		// Perform endianness conversion
 		if(send(server, buffer, packet->size + 4, 0) < 0) {
 			delete[] buffer;
-			throw connectionError("Packet send failed");
+			throw socketError("Packet send failed", WSAGetLastError());
 		}
 		delete[] buffer;
 	}
@@ -254,7 +264,7 @@ void RCON::getPacket(Packet* packet) {
 	while(totalread < 12) {
 		read = recv(server, packetbuffer + totalread, 12 - totalread, 0);
 		if(read == SOCKET_ERROR) {
-			throw connectionError("Packet recieve failed");
+			throw socketError("Packet recieve failed", WSAGetLastError());
 		} else if(read == 0) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
@@ -279,7 +289,7 @@ void RCON::getPacket(Packet* packet) {
 	while(totalread < bodysize) {
 		read = recv(server, packetbuffer + 12 + totalread, bodysize - totalread, 0);
 		if(read == SOCKET_ERROR) {
-			throw connectionError("Packet recieve failed");
+			throw socketError("Packet recieve failed", WSAGetLastError());
 		} else if(read == 0) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
@@ -294,5 +304,3 @@ inline void RCON::swapBytes_4(int32* n) {
 		 (*n & 0x00ff0000)>>8  |
 		 (*n & 0xff000000)>>24;
 }
-
-// TODO: Better error handling
