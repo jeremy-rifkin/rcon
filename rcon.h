@@ -53,15 +53,12 @@ public:
 	bool isAuthenticated();
 	void disconnect();
 	
-	struct authenticationError: public std::exception {
-		const char* what() const throw();
-	};
 	struct exception: public std::exception {
 		exception() {};
 		exception(char* msg, char* type);
 		~exception();
 		const char* what() const throw();
-		const char* getType() const throw();
+		const char* whatErr() const throw();
 	private:
 		char* errmsg;
 		char* errtype;
@@ -71,6 +68,9 @@ public:
 		socketError(char* msg, int ecode): exception(buildmsg(msg, ecode), "Socket Error") {};
 	private:
 		char* buildmsg(char* msg, int ecode);
+	};
+	struct authenticationError: public exception {
+		authenticationError(): exception("Server rejected the authentication. Probably an incorrect password.", "Authentication Error") {};
 	};
 	struct protocolError: public exception {
 		protocolError(char* msg): exception(msg, "Protocol Error") {};

@@ -182,9 +182,6 @@ void RCON::disconnect() {
 	}
 }
 
-const char* RCON::authenticationError::what() const throw() {
-	return "Server rejected the authentication. Probably an incorrect password.";
-}
 RCON::exception::exception(char* msg, char* type) {
 	errmsg = msg;
 	errtype = type;
@@ -196,7 +193,7 @@ RCON::exception::~exception() {
 const char* RCON::exception::what() const throw() {
 	return errmsg;
 }
-const char* RCON::exception::getType() const throw() {
+const char* RCON::exception::whatErr() const throw() {
 	return errtype;
 }
 

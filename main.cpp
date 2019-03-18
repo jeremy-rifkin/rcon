@@ -12,7 +12,7 @@
 #include "rcon.h"
 #include "dns.h"
 
-const char* version = "1.1";
+const char* version = "1.2";
 
 // Software pieces
 void usage() {
@@ -80,9 +80,9 @@ void executeCommand(const char* cmd, bool silent=false) {
 	char* resp;
 	try {
 		resp = server.executeCommand(cmd);
-	} catch(std::exception& e) {
-		std::cout<<"\r\x1B[90mExecution failed\x1B[0m";
-		std::cout<<std::endl<<"\x1B[91mError\x1B[0m while executing command: "<<e.what()<<std::endl;
+	} catch(RCON::exception& e) {
+		std::cout<<"\r\x1B[90mExecution failed\x1B[0m"<<std::endl;
+		std::cout<<"\x1B[91m"<<e.whatErr()<<":\x1B[0m "<<e.what()<<std::endl;
 		return;
 	}
 	if(!commandMode || !silent) std::cout<<"\r            \r"; // Clear status message
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
 	sigIntHandler.sa_handler = ctrlhandle;
 	sigemptyset(&sigIntHandler.sa_mask);
 	sigIntHandler.sa_flags = 0;
-	sigaction(SIGINT, &sigIntHandler, NULL);
+	sigaction(SIGINT, &sigIntHandler, 0);
 	#endif
 
 	initMcFormattingCodesTable();
@@ -200,19 +200,19 @@ int main(int argc, char *argv[]) {
 				switch(argv[i][j]) {
 					case 'p':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError\x1B[0m: Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
 						}
 						port_c = argv[i + la++];
 						break;
 					case 'P':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError\x1B[0m: Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
 						}
 						password = argv[i + la++];
 						break;
 					case 'c':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError\x1B[0m: Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
 						}
 						commandMode = true;
 						command = argv[i + la++];
@@ -224,17 +224,17 @@ int main(int argc, char *argv[]) {
 						mcColors = true;
 						break;
 					case 'S':
-						std::cout<<"\x1B[91mError\x1B[0m: Secure protocol not implemented yet."<<std::endl;
+						std::cout<<"\x1B[91mError:\x1B[0m Secure protocol not implemented yet."<<std::endl;
 						return 1;
 						break;
 					default:
-						std::cout<<"\x1B[91mError\x1B[0m: Unknown option \""<<argv[i][j]<<"\""<<std::endl;
+						std::cout<<"\x1B[91mError:\x1B[0m Unknown option \""<<argv[i][j]<<"\""<<std::endl;
 						break;
 				}
 			}
 			i += la - 1; // Skip over any parameter parameters
 		} else {
-			std::cout<<"\x1B[91mError\x1B[0m: Unexpected command line argument \""<<argv[i]<<"\""<<std::endl;
+			std::cout<<"\x1B[91mError:\x1B[0m Unexpected command line argument \""<<argv[i]<<"\""<<std::endl;
 			//return 1;
 		}
 	}
@@ -242,12 +242,12 @@ int main(int argc, char *argv[]) {
 	// Begin verifying that parameters are valid
 	// Check the port
 	if(port_c == 0x0) {
-		std::cout<<"\x1B[91mError\x1B[0m: Must specify port"<<std::endl;
+		std::cout<<"\x1B[91mError:\x1B[0m Must specify port"<<std::endl;
 		return 1;
 	}
 	int portlen = 0;
 	if(port_c[0] == '-') {
-		std::cout<<"\x1B[91mError\x1B[0m: Port is negative"<<std::endl;
+		std::cout<<"\x1B[91mError:\x1B[0m Port is negative"<<std::endl;
 		return 1;
 	}
 	// Check that port is numeric
@@ -256,7 +256,7 @@ int main(int argc, char *argv[]) {
 			break;
 		portlen++;
 		if(port_c[i] < '0' || port_c[i] > '9') { // if port_c[i] is not a number...
-			std::cout<<"\x1B[91mError\x1B[0m: Port is non-numeric"<<std::endl;
+			std::cout<<"\x1B[91mError:\x1B[0m Port is non-numeric"<<std::endl;
 			return 1;
 		}
 	}
@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
 	port = 0;
 	int mul = 1;
 	if(portlen > 5) { // This check prevents an excessively long port, which could cause mul to overflow
-		std::cout<<"\x1B[91mError\x1B[0m: Port is too large! Maximum port is 65535."<<std::endl;
+		std::cout<<"\x1B[91mError:\x1B[0m Port is too large! Maximum port is 65535."<<std::endl;
 		return 1;
 	}
 	for(int i = portlen - 1; i >= 0; i--) {
@@ -273,7 +273,7 @@ int main(int argc, char *argv[]) {
 	}
 	// Perform final check on port
 	if(port > 65535) {
-		std::cout<<"\x1B[91mError\x1B[0m: Port is too large! Maximum port is 65535."<<std::endl;
+		std::cout<<"\x1B[91mError:\x1B[0m Port is too large! Maximum port is 65535."<<std::endl;
 		return 1;
 	}
 
@@ -309,15 +309,19 @@ int main(int argc, char *argv[]) {
 	else {
 		int status = DNS_Lookup(host, hostIP);
 		if(status) {
-			std::cout<<"\x1B[91mError\x1B[0m: DNS lookup failed with error code "<<status<<" "<<errno<<" "<<std::hex<<std::uppercase<<status<<std::endl;
+			std::cout<<"\x1B[91mError:\x1B[0m DNS lookup failed with error code "<<status<<" "<<errno<<" "<<std::hex<<std::uppercase<<status<<std::endl;
 			std::cout<<"Make sure the hostname is just a domain name (e.g. no slashes, \"http://\", etc.)"<<std::endl;
 			return 1;
 		}
 	}
 	if(!commandMode || !silent) std::cout<<"Connecting to "<<hostIP<<" on port "<<port<<std::endl;
 	
-	server.connect(hostIP, port);
-	
+	try {
+		server.connect(hostIP, port);
+	} catch(RCON::exception& e) {
+		std::cout<<"\x1B[91m"<<e.whatErr()<<":\x1B[0m "<<e.what();
+		return 1;
+	}
 	
 	// Begin authentication
 	bool passwordAllocWithNew = false;
@@ -350,13 +354,14 @@ int main(int argc, char *argv[]) {
 		#elif NIX
 		tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 		#endif
+		std::cout<<"\r";
 	}
 
 	if(!commandMode || !silent) std::cout<<"\x1B[90mAuthenticating...\x1B[0m";
 	try {
 		server.auth(password);
-	} catch(std::exception& e) {
-		std::cout<<std::endl<<"\x1B[91mError\x1B[0m while authenticating: "<<e.what()<<std::endl;
+	} catch(RCON::exception& e) {
+		std::cout<<std::endl<<"\x1B[91m"<<e.whatErr()<<":\x1B[0m "<<e.what();
 		return 1;
 	}
 	for(int i = 0; password[i] != 0x0; i++) password[i] = 0x0;
@@ -392,6 +397,4 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-// TODO: Linux
 // TODO: Support ipv6?
-// TODO: Better error handling
