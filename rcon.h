@@ -1,8 +1,11 @@
 #include <string>
 #include <exception>
-#include <winsock2.h>
-#include "types.h"
 
+#ifdef WIN
+typedef unsigned int SOCKET;
+#elif NIX
+typedef int SOCKET;
+#endif
 
 // This class is not, as it stands, multi-thread friendly.
 class RCON {
@@ -21,9 +24,9 @@ class RCON {
 	bool connected = false;
 	// Utility structures
 	struct Packet {
-		int32 size;
-		int32 id;
-		int32 type;
+		int32_t size;
+		int32_t id;
+		int32_t type;
 		char body[MAX_BODY_SIZE];
 		char null = 0x0;
 	} __attribute__((packed));
@@ -34,7 +37,7 @@ class RCON {
 	};
 	static const struct Packet RESPONSE_END_DETECTOR;
 	// Endianness detection
-	static const int16 __ed;
+	static const int16_t __ed;
 	static const char* __edc;
 	static const bool IS_LITTLE_ENDIAN;
 public:
@@ -64,6 +67,7 @@ public:
 		char* errtype;
 	};
 	struct socketError: public exception {
+		socketError(char* msg): exception(msg, "Socket Error") {};
 		socketError(char* msg, int ecode): exception(buildmsg(msg, ecode), "Socket Error") {};
 	private:
 		char* buildmsg(char* msg, int ecode);
@@ -78,5 +82,5 @@ private:
 	void initSocket(char* ip, int port);
 	void sendPacket(const Packet* packet) const;
 	void getPacket(Packet* packet);
-	static inline void swapBytes_4(int32* n);
+	static inline void swapBytes_4(int32_t* n);
 };

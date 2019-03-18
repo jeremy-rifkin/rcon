@@ -1,3 +1,4 @@
+#ifdef WIN
 #include <winsock2.h>
 #include <windns.h>
 
@@ -21,3 +22,21 @@ int DNS_Lookup(char* host, char*& ret) {
 	}
 	return 0;
 }
+#elif NIX
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <errno.h>
+int DNS_Lookup(char* host, char*& ret) {
+	struct hostent* _host;
+	if((_host = gethostbyname(host)) == 0) {
+		return errno;
+	}
+	struct in_addr** addr_list = (struct in_addr**) _host->h_addr_list;
+	for(int i = 0; addr_list[i] != 0; i++) {
+		ret = inet_ntoa(*addr_list[i]);
+		return 0;
+	}
+	return -1;
+}
+#endif

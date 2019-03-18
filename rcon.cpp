@@ -1,7 +1,22 @@
 #include <cstring>
+#ifdef WIN
+#include <winsock2.h>
+int GetLastSocketErrorCode() {
+	return WSAGetLastError();
+}
+#elif NIX
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
+int GetLastSocketErrorCode() {
+	return errno;
+}
+#endif
 #include "rcon.h"
 
-const int16 RCON::__ed = 1;
+const int16_t RCON::__ed = 1;
 const char* RCON::__edc = (char*) &RCON::__ed;
 const bool RCON::IS_LITTLE_ENDIAN = RCON::__edc;
 const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
@@ -156,8 +171,12 @@ bool RCON::isAuthenticated() {
 }
 void RCON::disconnect() {
 	if(connected) {
+		#ifdef WIN
 		closesocket(server);
 		WSACleanup();
+		#elif NIX
+		close(server);
+		#endif
 		authenticated = false;
 		connected = false;
 	}
@@ -202,58 +221,65 @@ char* RCON::socketError::buildmsg(char* msg, int ecode) {
 	memcpy(fmsg + l + 13 - 1, hex, 4);
 	fmsg[l + 17 - 1] = '.';
 	fmsg[l + 17] = '\0';
-	delete[] msg;
+	//delete[] msg;
 	return fmsg;
 }
 
 void RCON::initSocket(char* ip, int port) {
+	// Set up address
+	sockaddr_in hostaddr;
+	//memset(&hostaddr, '0', sizeof(serv_addr));
+    hostaddr.sin_family = AF_INET;
+    hostaddr.sin_port = htons(port);
+    hostaddr.sin_addr.s_addr = inet_addr(ip);
+
+	#ifdef WIN
 	// Setup socket
 	WSADATA wsa;
-	struct sockaddr_in hostaddr;
-
 	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-		throw socketError("Socket startup failed.", WSAGetLastError());
-		return;
+		throw socketError("Socket startup failed.", GetLastSocketErrorCode());
 	}
-	//Create a socket
-	if((server = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-		throw socketError("Socket creation failed.", WSAGetLastError());
+	#elif NIX
+    
+	#endif
+	//Create socket
+	if((server = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		throw socketError("Socket creation failed.", GetLastSocketErrorCode());
 	}
-	
-	hostaddr.sin_addr.s_addr = inet_addr(ip);
-	hostaddr.sin_family = AF_INET;
-	hostaddr.sin_port = htons(port);
-
-	//Connect to remote server
-	if(::connect(server, (struct sockaddr *)&hostaddr, sizeof(hostaddr)) < 0) {
-		throw socketError("Socket connection failed.", WSAGetLastError());
+	//Connect to server
+	if(::connect(server, (struct sockaddr*)&hostaddr, sizeof(hostaddr)) < 0) {
+		throw socketError("Socket connection failed.", GetLastSocketErrorCode());
 	}
-
+	// Update status
 	connected = true;
-
-	DWORD timeout = 5/*seconds*/ * 1000;
-	setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+	// Configure socket timeout
+	int timeout = 5/*seconds*/ * 1000;
+	if(setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == -1) {
+		// Meh
+	}
 }
 void RCON::sendPacket(const Packet* packet) const {
+	char* buffer;
+	int buffersize = packet->size + 4;
 	if(IS_LITTLE_ENDIAN) {
-		if(send(server, (char*)packet, packet->size + 4, 0) < 0) {
-			throw socketError("Packet send failed", WSAGetLastError());
-		}
+		buffer = (char*)packet;
 	} else {
-		char* buffer = new char[packet->size + 4];
-		memcpy(buffer, packet, packet->size + 4);
+		buffer = new char[buffersize];
+		memcpy(buffer, packet, buffersize);
 		// Convert from big endian to little endian
-		swapBytes_4((int32*)(buffer));
-		swapBytes_4((int32*)(buffer + 4));
-		swapBytes_4((int32*)(buffer + 8));
-
-		// Perform endianness conversion
-		if(send(server, buffer, packet->size + 4, 0) < 0) {
-			delete[] buffer;
-			throw socketError("Packet send failed", WSAGetLastError());
-		}
-		delete[] buffer;
+		swapBytes_4((int32_t*)(buffer));
+		swapBytes_4((int32_t*)(buffer + 4));
+		swapBytes_4((int32_t*)(buffer + 8));
 	}
+	int sent, i = 0;
+	while(buffersize - i > 0) {
+		sent = send(server, buffer + i, buffersize - i, 0);
+		if(sent == -1) {
+			throw socketError("Packet send failed.", GetLastSocketErrorCode());
+		}
+		i += sent;
+	}
+	if(!IS_LITTLE_ENDIAN) delete[] buffer;
 }
 void RCON::getPacket(Packet* packet) {
 	char* packetbuffer = (char*)packet;
@@ -263,20 +289,24 @@ void RCON::getPacket(Packet* packet) {
 	// Get packet header (12 bytes)
 	while(totalread < 12) {
 		read = recv(server, packetbuffer + totalread, 12 - totalread, 0);
-		if(read == SOCKET_ERROR) {
-			throw socketError("Packet recieve failed", WSAGetLastError());
+		if(read == -1) {
+			throw socketError("Packet recieve failed.", GetLastSocketErrorCode());
 		} else if(read == 0) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
 		totalread += read;
+		#ifdef WIN
 		Sleep(10);
+		#elif NIX
+		usleep(10000);
+		#endif
 	}
 	
 	if(!IS_LITTLE_ENDIAN) {
 		// Convert little endian numbers values from the packet to big endian
-		swapBytes_4((int32*)(packetbuffer));
-		swapBytes_4((int32*)(packetbuffer + 4));
-		swapBytes_4((int32*)(packetbuffer + 8));
+		swapBytes_4((int32_t*)(packetbuffer));
+		swapBytes_4((int32_t*)(packetbuffer + 4));
+		swapBytes_4((int32_t*)(packetbuffer + 8));
 	}
 
 	int bodysize = packet->size - 4 - 4;
@@ -288,17 +318,21 @@ void RCON::getPacket(Packet* packet) {
 	totalread = 0;
 	while(totalread < bodysize) {
 		read = recv(server, packetbuffer + 12 + totalread, bodysize - totalread, 0);
-		if(read == SOCKET_ERROR) {
-			throw socketError("Packet recieve failed", WSAGetLastError());
+		if(read == -1) {
+			throw socketError("Packet recieve failed", GetLastSocketErrorCode());
 		} else if(read == 0) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
 		totalread += read;
+		#ifdef WIN
 		Sleep(10);
+		#elif NIX
+		usleep(10000);
+		#endif
 	}
 }
 
-inline void RCON::swapBytes_4(int32* n) {
+inline void RCON::swapBytes_4(int32_t* n) {
 	*n = (*n & 0x000000ff)<<24 |
 		 (*n & 0x0000ff00)<<8  |
 		 (*n & 0x00ff0000)>>8  |

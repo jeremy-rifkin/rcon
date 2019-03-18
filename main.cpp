@@ -1,7 +1,14 @@
 #include <iostream>
 #include <string>
 #include <stdio.h>
+#ifdef WIN
 #include <windows.h>
+#elif NIX
+#include <cstring>
+#include <signal.h>
+#include <unistd.h>
+#include <termios.h>
+#endif
 #include "rcon.h"
 #include "dns.h"
 
@@ -29,7 +36,11 @@ bool mcColors = false;
 bool commandMode = false;
 
 bool ctrlc = false;
+#ifdef WIN
 int WINAPI ctrlhandle(DWORD ctype) {
+#elif NIX
+void ctrlhandle(int s) {
+#endif
 	ctrlc = true;
 	server.disconnect();
 	std::cout<<std::endl<<"Bye!"<<std::endl;
@@ -110,7 +121,7 @@ void executeCommand(const char* cmd, bool silent=false) {
 		// Reset colors
 		if(mcColors) std::cout<<"\x1B[0m";
 		// Output the newline character if necessary
-		if(!(commandMode || resp[i - 1] == '\n'))
+		if(resp[i - 1] != '\n')
 			std::cout<<std::endl;
 	}
 	// Cleanup
@@ -119,11 +130,23 @@ void executeCommand(const char* cmd, bool silent=false) {
 
 int main(int argc, char *argv[]) {
 	// Perform initial setup
+	//https://stackoverflow.com/questions/1641182/how-can-i-catch-a-ctrl-c-event
+	#ifdef WIN
 	if(!SetConsoleCtrlHandler(ctrlhandle, true)) {
-		std::cout<<"Setup error "<<GetLastError()<<" while binding ctrl handle."<<std::endl;
+		std::cout<<"Setup error "<<GetLastError()<<" while binding ctrl c handle."<<std::endl;
 		// Don't necessarily need to crit fail
 	}
+	#elif NIX
+	struct sigaction sigIntHandler;
+	sigIntHandler.sa_handler = ctrlhandle;
+	sigemptyset(&sigIntHandler.sa_mask);
+	sigIntHandler.sa_flags = 0;
+	sigaction(SIGINT, &sigIntHandler, NULL);
+	#endif
+
 	initMcFormattingCodesTable();
+
+	#ifdef WIN
 	// Make windows support ansi colors
 	HANDLE hStdout;
 	hStdout = GetStdHandle(STD_OUTPUT_HANDLE); 
@@ -140,6 +163,7 @@ int main(int argc, char *argv[]) {
 		std::cout<<"Setup error "<<GetLastError()<<" while setting console mode. Continuing."<<std::endl;
 		// Don't necessarily need to crit fail
 	}
+	#endif
 
 	// Program info
 	// Host info
@@ -285,7 +309,7 @@ int main(int argc, char *argv[]) {
 	else {
 		int status = DNS_Lookup(host, hostIP);
 		if(status) {
-			std::cout<<"\x1B[91mError\x1B[0m: DNS lookup failed with error code "<<std::hex<<std::uppercase<<status<<std::endl;
+			std::cout<<"\x1B[91mError\x1B[0m: DNS lookup failed with error code "<<status<<" "<<errno<<" "<<std::hex<<std::uppercase<<status<<std::endl;
 			std::cout<<"Make sure the hostname is just a domain name (e.g. no slashes, \"http://\", etc.)"<<std::endl;
 			return 1;
 		}
@@ -296,19 +320,36 @@ int main(int argc, char *argv[]) {
 	
 	
 	// Begin authentication
+	bool passwordAllocWithNew = false;
 	if(password == 0x0) { // Then user needs to enter password
 		std::cout<<"Password: ";
 		//https://stackoverflow.com/questions/6899025/hide-user-input-on-password-prompt
+		#ifdef WIN
 		HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE); 
 		DWORD mode = 0;
 		GetConsoleMode(hStdin, &mode);
 		SetConsoleMode(hStdin, mode & (~ENABLE_ECHO_INPUT));
+		#elif NIX
+		termios oldt;
+		tcgetattr(STDIN_FILENO, &oldt);
+		termios newt = oldt;
+		newt.c_lflag &= ~ECHO;
+		tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+		#endif
+
 		std::string s;
 		getline(std::cin, s);
 		char* s_ = new char[s.size() + 1];
+		passwordAllocWithNew = true;
 		strcpy(s_, s.c_str());
+		for(int i = 0, l = s.length(); i < l; i++) s[i] = '\0';
 		password = s_;
+
+		#ifdef WIN
 		SetConsoleMode(hStdin, mode | ENABLE_ECHO_INPUT);
+		#elif NIX
+		tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+		#endif
 	}
 
 	if(!commandMode || !silent) std::cout<<"\x1B[90mAuthenticating...\x1B[0m";
@@ -318,7 +359,8 @@ int main(int argc, char *argv[]) {
 		std::cout<<std::endl<<"\x1B[91mError\x1B[0m while authenticating: "<<e.what()<<std::endl;
 		return 1;
 	}
-	delete[] password; // For safe measure (not that rcon is a secure protocol to begin with...)
+	for(int i = 0; password[i] != 0x0; i++) password[i] = 0x0;
+	if(passwordAllocWithNew) delete[] password; // For safe measure (not that rcon is a secure protocol to begin with...)
 	if(!commandMode || !silent) std::cout<<"\r\x1B[90mAuthentication success\x1B[0m"<<std::endl;
 
 	// Handle command mode
@@ -334,7 +376,11 @@ int main(int argc, char *argv[]) {
 	std::string command_;
 	while(true) {
 		if(ctrlc) {
+			#ifdef WIN
 			Sleep(5 * 1000);
+			#elif NIX
+			sleep(5);
+			#endif
 			break;
 		}
 		std::cout<<host<<"> ";
@@ -348,3 +394,4 @@ int main(int argc, char *argv[]) {
 
 // TODO: Linux
 // TODO: Support ipv6?
+// TODO: Better error handling
