@@ -1,4 +1,4 @@
-#ifdef WIN
+#ifdef _WIN32
 #include <winsock2.h>
 #include <windns.h>
 
@@ -22,11 +22,13 @@ int DNS_Lookup(char* host, char*& ret) {
 	}
 	return 0;
 }
-#elif NIX
+
+#elif __linux__
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <errno.h>
+
 int DNS_Lookup(char* host, char*& ret) {
 	struct hostent* _host;
 	if((_host = gethostbyname(host)) == 0) {

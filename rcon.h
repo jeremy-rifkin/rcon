@@ -1,9 +1,9 @@
 #include <string>
 #include <exception>
 
-#ifdef WIN
+#ifdef _WIN32
 typedef unsigned int SOCKET;
-#elif NIX
+#elif __linux__
 typedef int SOCKET;
 #endif
 

@@ -1,9 +1,9 @@
 #include <iostream>
 #include <string>
 #include <stdio.h>
-#ifdef WIN
+#ifdef _WIN32
 #include <windows.h>
-#elif NIX
+#elif __linux__
 #include <cstring>
 #include <signal.h>
 #include <unistd.h>
@@ -36,9 +36,9 @@ bool mcColors = false;
 bool commandMode = false;
 
 bool ctrlc = false;
-#ifdef WIN
+#ifdef _WIN32
 int WINAPI ctrlhandle(DWORD ctype) {
-#elif NIX
+#elif __linux__
 void ctrlhandle(int s) {
 #endif
 	ctrlc = true;
@@ -131,12 +131,12 @@ void executeCommand(const char* cmd, bool silent=false) {
 int main(int argc, char *argv[]) {
 	// Perform initial setup
 	//https://stackoverflow.com/questions/1641182/how-can-i-catch-a-ctrl-c-event
-	#ifdef WIN
+	#ifdef _WIN32
 	if(!SetConsoleCtrlHandler(ctrlhandle, true)) {
 		std::cout<<"Setup error "<<GetLastError()<<" while binding ctrl c handle."<<std::endl;
 		// Don't necessarily need to crit fail
 	}
-	#elif NIX
+	#elif __linux__
 	struct sigaction sigIntHandler;
 	sigIntHandler.sa_handler = ctrlhandle;
 	sigemptyset(&sigIntHandler.sa_mask);
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 
 	initMcFormattingCodesTable();
 
-	#ifdef WIN
+	#ifdef _WIN32
 	// Make windows support ansi colors
 	HANDLE hStdout;
 	hStdout = GetStdHandle(STD_OUTPUT_HANDLE); 
@@ -328,12 +328,12 @@ int main(int argc, char *argv[]) {
 	if(password == 0x0) { // Then user needs to enter password
 		std::cout<<"Password: ";
 		//https://stackoverflow.com/questions/6899025/hide-user-input-on-password-prompt
-		#ifdef WIN
+		#ifdef _WIN32
 		HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE); 
 		DWORD mode = 0;
 		GetConsoleMode(hStdin, &mode);
 		SetConsoleMode(hStdin, mode & (~ENABLE_ECHO_INPUT));
-		#elif NIX
+		#elif __linux__
 		termios oldt;
 		tcgetattr(STDIN_FILENO, &oldt);
 		termios newt = oldt;
@@ -349,9 +349,9 @@ int main(int argc, char *argv[]) {
 		for(int i = 0, l = s.length(); i < l; i++) s[i] = '\0';
 		password = s_;
 
-		#ifdef WIN
+		#ifdef _WIN32
 		SetConsoleMode(hStdin, mode | ENABLE_ECHO_INPUT);
-		#elif NIX
+		#elif __linux__
 		tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 		#endif
 		std::cout<<"\r";
@@ -381,9 +381,9 @@ int main(int argc, char *argv[]) {
 	std::string command_;
 	while(true) {
 		if(ctrlc) {
-			#ifdef WIN
+			#ifdef _WIN32
 			Sleep(5 * 1000);
-			#elif NIX
+			#elif __linux__
 			sleep(5);
 			#endif
 			break;

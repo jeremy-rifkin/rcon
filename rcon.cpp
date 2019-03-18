@@ -1,10 +1,10 @@
 #include <cstring>
-#ifdef WIN
+#ifdef _WIN32
 #include <winsock2.h>
 int GetLastSocketErrorCode() {
 	return WSAGetLastError();
 }
-#elif NIX
+#elif __linux__
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -171,10 +171,10 @@ bool RCON::isAuthenticated() {
 }
 void RCON::disconnect() {
 	if(connected) {
-		#ifdef WIN
+		#ifdef _WIN32
 		closesocket(server);
 		WSACleanup();
-		#elif NIX
+		#elif __linux__
 		close(server);
 		#endif
 		authenticated = false;
@@ -230,13 +230,13 @@ void RCON::initSocket(char* ip, int port) {
     hostaddr.sin_port = htons(port);
     hostaddr.sin_addr.s_addr = inet_addr(ip);
 
-	#ifdef WIN
+	#ifdef _WIN32
 	// Setup socket
 	WSADATA wsa;
 	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
 		throw socketError("Socket startup failed.", GetLastSocketErrorCode());
 	}
-	#elif NIX
+	#elif __linux__
     
 	#endif
 	//Create socket
@@ -292,9 +292,9 @@ void RCON::getPacket(Packet* packet) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
 		totalread += read;
-		#ifdef WIN
+		#ifdef _WIN32
 		Sleep(10);
-		#elif NIX
+		#elif __linux__
 		usleep(10000);
 		#endif
 	}
@@ -321,9 +321,9 @@ void RCON::getPacket(Packet* packet) {
 			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
 		}
 		totalread += read;
-		#ifdef WIN
+		#ifdef _WIN32
 		Sleep(10);
-		#elif NIX
+		#elif __linux__
 		usleep(10000);
 		#endif
 	}
