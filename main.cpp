@@ -12,22 +12,22 @@
 #include "rcon.h"
 #include "dns.h"
 
-const char* version = "1.2";
+const char* version = "1.0.0";
 
 // Software pieces
 void usage() {
 	std::cout<<"rcon client version "<<version<<std::endl;
 	std::cout<<"Usage:"<<std::endl;
-	std::cout<<"rcon <host> [options]"<<std::endl;
-	std::cout<<"<host> can be an ip or domain name and can include the port."<<std::endl;
+	std::cout<<"    rcon <host> [options]"<<std::endl;
+	std::cout<<"Parameters:"<<std::endl;
+	std::cout<<"    <host> can be an ip or domain name and can include a port."<<std::endl;
 	std::cout<<"Options:"<<std::endl;
 	std::cout<<"    -h --help     Display help message."<<std::endl;
-	std::cout<<"    -p <port>     RCON Port. Overrides port specified along with host, if present."<<std::endl;
+	std::cout<<"    -p <port>     Port to connect to"<<std::endl;
 	std::cout<<"    -P <password> RCON Password. If not present the user will be prompted for a password."<<std::endl;
-	std::cout<<"    -c <command>  Command to execute. If present, the program will connect, authenticate, run the command, and then exit."<<std::endl;
-	std::cout<<"    -s            Silent mode. Only relevant if -c is present. Silent mode will suppress everything except command response."<<std::endl;
-	std::cout<<"    -S            Use a secure SCON protocol (will fail if the server does not support SCON). TBA."<<std::endl;
-	std::cout<<"    -M            Support Minecraft colors and other formatting codes."<<std::endl;
+	std::cout<<"    -c <command>  Command to execute. If present, the program will simply run the command and exit."<<std::endl;
+	std::cout<<"    -s            Silent mode: suppress everything except command response. Only matters if -c is present."<<std::endl;
+	std::cout<<"    -M            Support Minecraft text formatting codes."<<std::endl;
 }
 
 RCON server;
@@ -44,7 +44,7 @@ void ctrlhandle(int s) {
 	ctrlc = true;
 	server.disconnect();
 	std::cout<<std::endl<<"Bye!"<<std::endl;
-	exit(1);
+	exit(0);
 }
 
 char nullstr = '\0';
