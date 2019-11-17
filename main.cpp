@@ -24,9 +24,12 @@ void usage() {
 	std::cout<<"Options:"<<std::endl;
 	std::cout<<"    -h --help     Display help message."<<std::endl;
 	std::cout<<"    -p <port>     Port to connect to"<<std::endl;
-	std::cout<<"    -P <password> RCON Password. If not present the user will be prompted for a password."<<std::endl;
-	std::cout<<"    -c <command>  Command to execute. If present, the program will simply run the command and exit."<<std::endl;
-	std::cout<<"    -s            Silent mode: suppress everything except command response. Only matters if -c is present."<<std::endl;
+	std::cout<<"    -P <password> RCON Password. If not present the user will be prompted for a "
+					"password."<<std::endl;
+	std::cout<<"    -c <command>  Command to execute. If present, the program will simply run the "
+					"command and exit."<<std::endl;
+	std::cout<<"    -s            Silent mode: suppress everything except command response. Only "
+					"matters if -c is present."<<std::endl;
 	std::cout<<"    -M            Support Minecraft text formatting codes."<<std::endl;
 }
 
@@ -99,7 +102,8 @@ void executeCommand(const char* cmd, bool silent=false) {
 				if(resp[i] == '\\' && resp[i + 1] == 'n') { // if seq == \n // lookahead is safe
 					escape = "\n";
 					format = true;
-				} else if((unsigned char)resp[i] == 0xc2 && (unsigned char)resp[i + 1] == 0xa7) { // if seq == section sign, which in utf-8 is 0xC2 0xA7 // Lookahead is safe
+				} else if((unsigned char)resp[i] == 0xc2 && (unsigned char)resp[i + 1] == 0xa7) {
+					// if seq == section sign, which in utf-8 is 0xC2 0xA7 // Lookahead is safe
 					escape = McFormattingCodesTable[resp[i + 2]]; // Lookahead is still safe
 					if(*escape != '\0')
 						format = true;
@@ -156,11 +160,13 @@ int main(int argc, char *argv[]) {
 	}
 	DWORD mode = 0;
 	if(!GetConsoleMode(hStdout, &mode)){
-		std::cout<<"Setup error "<<GetLastError()<<" while acquiring console mode info. Continuing."<<std::endl;
+		std::cout<<"Setup error "<<GetLastError()<<" while acquiring console mode info. Continuing."
+					<<std::endl;
 		// Don't necessarily need to crit fail
 	}
 	if(!SetConsoleMode(hStdout, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)){
-		std::cout<<"Setup error "<<GetLastError()<<" while setting console mode. Continuing."<<std::endl;
+		std::cout<<"Setup error "<<GetLastError()<<" while setting console mode. Continuing."
+					<<std::endl;
 		// Don't necessarily need to crit fail
 	}
 	#endif
@@ -186,7 +192,8 @@ int main(int argc, char *argv[]) {
 	for(int i = 0; host[i] != 0x0; i++) {
 		if(host[i] == ':') {
 			host[i] = 0x0; // Null terminate host in the place of the ":"
-			port_c = &host[i + 1]; // ... and point port to what comes immediately after // Lookahead is safe
+			port_c = &host[i + 1]; // ... and point port to what comes immediately after
+										// Safe to access i + 1 here.
 			break;
 		}
 	}
@@ -200,19 +207,22 @@ int main(int argc, char *argv[]) {
 				switch(argv[i][j]) {
 					case 'p':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"
+										<<argv[i][j]<<std::endl;
 						}
 						port_c = argv[i + la++];
 						break;
 					case 'P':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"
+										<<argv[i][j]<<std::endl;
 						}
 						password = argv[i + la++];
 						break;
 					case 'c':
 						if(i + la >= argc) {
-							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"<<argv[i][j]<<std::endl;
+							std::cout<<"\x1B[91mError:\x1B[0m Expected parameter after option -"
+										<<argv[i][j]<<std::endl;
 						}
 						commandMode = true;
 						command = argv[i + la++];
@@ -224,17 +234,20 @@ int main(int argc, char *argv[]) {
 						mcColors = true;
 						break;
 					case 'S':
-						std::cout<<"\x1B[91mError:\x1B[0m Secure protocol not implemented yet."<<std::endl;
+						std::cout<<"\x1B[91mError:\x1B[0m Secure protocol not implemented yet."
+									<<std::endl;
 						return 1;
 						break;
 					default:
-						std::cout<<"\x1B[91mError:\x1B[0m Unknown option \""<<argv[i][j]<<"\""<<std::endl;
+						std::cout<<"\x1B[91mError:\x1B[0m Unknown option \""<<argv[i][j]<<"\""
+									<<std::endl;
 						break;
 				}
 			}
 			i += la - 1; // Skip over any parameter parameters
 		} else {
-			std::cout<<"\x1B[91mError:\x1B[0m Unexpected command line argument \""<<argv[i]<<"\""<<std::endl;
+			std::cout<<"\x1B[91mError:\x1B[0m Unexpected command line argument \""<<argv[i]<<"\""
+						<<std::endl;
 			//return 1;
 		}
 	}
@@ -263,7 +276,8 @@ int main(int argc, char *argv[]) {
 	// Convert port_c to int
 	port = 0;
 	int mul = 1;
-	if(portlen > 5) { // This check prevents an excessively long port, which could cause mul to overflow
+	if(portlen > 5) { // This check prevents trying to do anything with a port that is too big.
+						// Avoids int overflow
 		std::cout<<"\x1B[91mError:\x1B[0m Port is too large! Maximum port is 65535."<<std::endl;
 		return 1;
 	}
@@ -309,8 +323,10 @@ int main(int argc, char *argv[]) {
 	else {
 		int status = DNS_Lookup(host, hostIP);
 		if(status) {
-			std::cout<<"\x1B[91mError:\x1B[0m DNS lookup failed with error code "<<status<<" "<<errno<<" "<<std::hex<<std::uppercase<<status<<std::endl;
-			std::cout<<"Make sure the hostname is just a domain name (e.g. no slashes, \"http://\", etc.)"<<std::endl;
+			std::cout<<"\x1B[91mError:\x1B[0m DNS lookup failed with error code "<<status<<" "
+						<<errno<<" "<<std::hex<<std::uppercase<<status<<std::endl;
+			std::cout<<"Make sure the hostname is just a domain name (e.g. no slashes, "
+						"\"http://\", etc.)"<<std::endl;
 			return 1;
 		}
 	}
@@ -364,8 +380,9 @@ int main(int argc, char *argv[]) {
 		std::cout<<std::endl<<"\x1B[91m"<<e.whatErr()<<":\x1B[0m "<<e.what();
 		return 1;
 	}
+	// Clear password for safe measure. (not that rcon is a secure protocol to begin with...)
 	for(int i = 0; password[i] != 0x0; i++) password[i] = 0x0;
-	if(passwordAllocWithNew) delete[] password; // For safe measure (not that rcon is a secure protocol to begin with...)
+	if(passwordAllocWithNew) delete[] password;
 	if(!commandMode || !silent) std::cout<<"\r\x1B[90mAuthentication success\x1B[0m"<<std::endl;
 
 	// Handle command mode

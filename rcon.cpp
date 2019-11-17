@@ -19,7 +19,8 @@ int GetLastSocketErrorCode() {
 const int16_t RCON::__ed = 1;
 const char* RCON::__edc = (char*) &RCON::__ed;
 const bool RCON::IS_LITTLE_ENDIAN = RCON::__edc;
-const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID, 0, 0x0, 0x0};
+const struct RCON::Packet RCON::RESPONSE_END_DETECTOR = {4 + 4 + 1 + 1, RESPONSE_END_DETECTOR_ID,
+															0, 0x0, 0x0};
 
 // (De-)Constructors
 RCON::RCON() {
@@ -52,9 +53,13 @@ void RCON::auth(char* password) {
 	Packet authPacket;
 
 	int passlen = 0;
-	for(; (authPacket.body[passlen++] = password[passlen]) != 0x0 && passlen < 4087;); // Copy password into authPacket.body and count the password length // Note: password[passlen] is evaluated before authPacket.body[passlen++] // passlen will include the null terminator
+	// Copy password into authPacket.body and count the password length
+	// Note: password[passlen] is evaluated before authPacket.body[passlen++]
+	// passlen will include the null terminator
+	for(; (authPacket.body[passlen++] = password[passlen]) != 0x0 && passlen < 4087;);
 	if(passlen == 4087 && password[passlen - 1] == 0x0)
-		throw valueError("Password too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
+		// Have to fail here. The spec doesn't define multipacket auth/exec_command requests.
+		throw valueError("Password too long.");
 	authPacket.body[passlen] = 0x0;
 
 	// Setup the rest of the packet
@@ -66,8 +71,12 @@ void RCON::auth(char* password) {
 
 	Packet response;
 	int tries = 0;
-	// "When the server receives an auth request, it will respond with an empty SERVERDATA_RESPONSE_VALUE, followed immediately by a SERVERDATA_AUTH_RESPONSE indicating whether authentication succeeded or failed." - https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
-	// Handle SERVERDATA_RESPONSE_VALUE, which appears not to be sent in all implementations of this protocol
+	// "When the server receives an auth request, it will respond with an empty
+	//  SERVERDATA_RESPONSE_VALUE, followed immediately by a SERVERDATA_AUTH_RESPONSE indicating
+	//  whether authentication succeeded or failed."
+	// - https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
+	// Handle SERVERDATA_RESPONSE_VALUE, which does not appear to be sent in all implementations of
+	// this protocol
 	while(tries++ < 2) {
 		getPacket(&response);
 		
@@ -79,7 +88,7 @@ void RCON::auth(char* password) {
 				return;
 			}
 			authenticated = true;
-			break; 
+			break;
 		} else {
 			throw protocolError("Unexpected packet while authenticating.");
 		}
@@ -95,10 +104,11 @@ char* RCON::executeCommand(const char* command) {
 	
 	Packet cmdPacket;
 
-	int cmdlen = 0;
-	for(; (cmdPacket.body[cmdlen++] = command[cmdlen]) != 0x0 && cmdlen < 4087;); // cmdlen will include the null terminator
+	int cmdlen = 0; // cmdlen will include the null terminator
+	for(; (cmdPacket.body[cmdlen++] = command[cmdlen]) != 0x0 && cmdlen < 4087;);
 	if(cmdlen == 4087 && command[cmdlen - 1] == 0x0)
-		throw valueError("Command too long."); // Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
+		// Have to fail here. The protocol doesn't define multipacket auth/exec_command requests.
+		throw valueError("Command too long.");
 	cmdPacket.body[cmdlen] = 0x0;
 
 	// Setup the rest of the packet
@@ -124,9 +134,9 @@ char* RCON::executeCommand(const char* command) {
 			continue;
 		}
 		if(responsePacket.id == RESPONSE_END_DETECTOR_ID) {
-			// Source servers will mirror back the packet then send another packet pack with junk data
-			// Minecraft servers will just send a packet complaining that it doesn't know what to do with the detector packet.
-			// This will accommodate both
+			// Source servers will mirror back the packet then send another packet pack with junk
+			// data. Minecraft servers will just send a packet complaining that it doesn't know what
+			// to do with the detector packet. This will accommodate both
 			if(responsePacket.size > RESPONSE_END_DETECTOR.size)
 				break;
 		}
@@ -289,7 +299,8 @@ void RCON::getPacket(Packet* packet) {
 		if(read == -1) {
 			throw socketError("Packet recieve failed.", GetLastSocketErrorCode());
 		} else if(read == 0) {
-			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
+			throw protocolError("Got no data from socket, even though data was expected. This "
+									"shouldn't happen.");
 		}
 		totalread += read;
 		#ifdef _WIN32
@@ -318,7 +329,8 @@ void RCON::getPacket(Packet* packet) {
 		if(read == -1) {
 			throw socketError("Packet recieve failed", GetLastSocketErrorCode());
 		} else if(read == 0) {
-			throw protocolError("Got no data from socket, even though data was expected. This shouldn't happen.");
+			throw protocolError("Got no data from socket, even though data was expected. This "
+									"shouldn't happen.");
 		}
 		totalread += read;
 		#ifdef _WIN32

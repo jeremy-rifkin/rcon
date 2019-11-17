@@ -16,14 +16,17 @@ class RCON {
 	static const int SERVERDATA_RESPONSE_VALUE = 0;
 	static const int STD_TRANSMITION_ID = 0;
 	static const int RESPONSE_END_DETECTOR_ID = 1;
-	static const int MAX_PACKET_SIZE = 4500; // According to the spec the max packet size is 4096 but Valve can't implement their own fucking protocol and srcds consistently sends packets with a size field slightly larger than 4096 (on very long responses).
+	// According to the spec, the max packet size is 4096. But it seems Valve can't implement their
+	// own protocol correctly and srcds consistently sends packets with a size field slightly larger
+	// than 4096 (on very long responses). I'll go with a max size of 4500 to accommodate stupidity.
+	static const int MAX_PACKET_SIZE = 4500;
 	static const int MAX_BODY_SIZE = MAX_PACKET_SIZE - 4 - 4 - 1;
 	// Socket information
 	SOCKET server;
 	bool authenticated = false;
 	bool connected = false;
 	// Utility structures
-	struct Packet {
+	static struct Packet {
 		int32_t size;
 		int32_t id;
 		int32_t type;
@@ -53,7 +56,7 @@ public:
 	bool isAuthenticated();
 	void disconnect();
 	
-	struct exception: public std::exception {
+	static struct exception: public std::exception {
 		exception() {};
 		exception(char* msg, char* type);
 		~exception();
@@ -63,19 +66,20 @@ public:
 		char* errmsg;
 		char* errtype;
 	};
-	struct socketError: public exception {
+	struct socketError: public RCON::exception {
 		socketError(char* msg): exception(msg, "Socket Error") {};
 		socketError(char* msg, int ecode): exception(buildmsg(msg, ecode), "Socket Error") {};
 	private:
 		char* buildmsg(char* msg, int ecode);
 	};
-	struct authenticationError: public exception {
-		authenticationError(): exception("Server rejected the authentication. Probably an incorrect password.", "Authentication Error") {};
+	struct authenticationError: public RCON::exception {
+		authenticationError(): exception("Server rejected the authentication. Probably an "
+											"incorrect password.", "Authentication Error") {};
 	};
-	struct protocolError: public exception {
+	struct protocolError: public RCON::exception {
 		protocolError(char* msg): exception(msg, "Protocol Error") {};
 	};
-	struct valueError: public exception {
+	struct valueError: public RCON::exception {
 		valueError(char* msg): exception(msg, "Value Error") {};
 	};
 private:
