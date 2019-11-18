@@ -59,8 +59,9 @@ formatting codes.
 ```
 rcon 10.0.0.2 -pPM 25575 password
 ```
-Rcon supports option collapsing. This command is the same as the above command. Connects to
-`10.0.0.2` on port `25575` using password `password`, and supports Minecraft text formatting codes.
+Option flags can be collapsed, and rcon will match them with the corresponding positional arguments.
+This command is the same as the above command. Connects to `10.0.0.2` on port `25575` using password
+`password`, and supports Minecraft text formatting codes.
 
 ```
 rcon 10.0.0.2:25575 -csM command
@@ -68,7 +69,6 @@ rcon 10.0.0.2:25575 -csM command
 Connects to `10.0.0.2` on port `25575`, runs a command, handles Minecraft formatting codes, and
 silences all output except for the command response. Since no password was specified, the user will
 still be prompted for a password.
-
 
 # Screenshots
 
@@ -85,7 +85,6 @@ still be prompted for a password.
 ![](screenshots/s5.png)
 
 ![](screenshots/s6.png)
-
 
 # License
 
